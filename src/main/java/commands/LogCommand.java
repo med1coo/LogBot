@@ -1,6 +1,10 @@
 package commands;
 
 import net.dv8tion.jda.api.EmbedBuilder;
+import net.dv8tion.jda.api.entities.Guild;
+import net.dv8tion.jda.api.entities.Member;
+import net.dv8tion.jda.api.entities.Role;
+import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.events.session.ReadyEvent;
@@ -25,45 +29,73 @@ public class LogCommand extends ListenerAdapter {
         String command = event.getName();
 
         if (command.equals("log")) {
-            String userID = event.getUser().getId();
+            User user = event.getUser();
 
-            String filePath = "/home/medicoo/marten/logs/latest.log";
-            StringBuilder content = new StringBuilder();
+            if (hasUserPermission(user)) {
+                String filePath = "/home/medicoo/marten/logs/latest.log";
+                StringBuilder content = new StringBuilder();
 
-            // liest hier die Datei und fügt jede Zeile latest.log in meinen String hinzu
-            try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
-                String line;
-                while ((line = br.readLine()) != null) { // while schleife zum hinzufügen
-                    // Das ist RegEX. Wird benutzt um ein bestimmtes Muster zu erkennen.
-                    // Ich filter dort die wichtigen Sachen raus, bei jeder Zeile
-                    Pattern pattern = Pattern.compile("\\[(\\d{2}[A-Za-z]{3}\\d{4} \\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\] \\[(.*?)\\]: (.*)");
-                    Matcher matcher = pattern.matcher(line);
+                // liest hier die Datei und fügt jede Zeile latest.log in meinen String hinzu
+                try (BufferedReader br = new BufferedReader(new FileReader(filePath))) {
+                    String line;
+                    while ((line = br.readLine()) != null) { // while schleife zum hinzufügen
+                        // Das ist RegEX. Wird benutzt um ein bestimmtes Muster zu erkennen.
+                        // Ich filter dort die wichtigen Sachen raus, bei jeder Zeile
+                        Pattern pattern = Pattern.compile("\\[(\\d{2}[A-Za-z]{3}\\d{4} \\d{2}:\\d{2}:\\d{2}\\.\\d{3})\\] \\[(.*?)\\]: (.*)");
+                        Matcher matcher = pattern.matcher(line);
 
-                    if (matcher.find()) {
-                        String timestamp = matcher.group(1); // nimmt die Uhrzeit
-                        String MCEvent = matcher.group(3); // nimmt das Ereignis
+                        if (matcher.find()) {
+                            String timestamp = matcher.group(1); // nimmt die Uhrzeit
+                            String MCEvent = matcher.group(3); // nimmt das Ereignis
 
-                        content.append("[" + timestamp + "] " + MCEvent).append("\n"); // und fügt es dem String hinzu
+                            content.append("[" + timestamp + "] " + MCEvent).append("\n"); // und fügt es dem String hinzu
+                        }
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                // hier wird am Ende der String genommen und nur die letzten 4096 Zeichen verwendet
+                String wholeContent = content.toString();
+                int length = wholeContent.length();
+                int startIndex = Math.max(length - 4096, 0);
+                String last4096Chars = wholeContent.substring(startIndex);
+
+                System.out.println(last4096Chars);
+
+                EmbedBuilder embed = new EmbedBuilder();
+                embed.setTitle("Logs");
+                embed.setDescription(last4096Chars);
+                embed.setFooter("Letzte 4096 Zeichen");
+
+                event.replyEmbeds(embed.build()).setEphemeral(true).queue();
+            } else {
+                event.reply("Du hast keine Permission!").setEphemeral(true).queue();
+            }
+        }
+    }
+
+    public boolean hasUserPermission(User user) {
+        String teamRoleID = "1234638273398177824";
+
+        long guildID = 1174794176005677067L;
+        Guild guild = user.getJDA().getGuildById(guildID);
+
+        if (guild != null) {
+            try {
+                Member member = guild.retrieveMemberById(user.getId()).complete();
+
+                if (member != null) {
+                    for (Role role : member.getRoles()) {
+                        if (teamRoleID.contains(role.getId())) {
+                            return true;
+                        }
                     }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
+            } catch (Exception e) {
+                return false;
             }
-            // hier wird am Ende der String genommen und nur die letzten 4096 Zeichen verwendet
-            String wholeContent = content.toString();
-            int length = wholeContent.length();
-            int startIndex = Math.max(length - 4096, 0);
-            String last4096Chars = wholeContent.substring(startIndex);
-
-            System.out.println(last4096Chars);
-
-            EmbedBuilder embed = new EmbedBuilder();
-            embed.setTitle("Logs");
-            embed.setDescription(last4096Chars);
-            embed.setFooter("Letzte 4096 Zeichen");
-
-            event.replyEmbeds(embed.build()).setEphemeral(true).queue();
         }
+        return false;
     }
 
     // nimmt alle Commands und fügt die dem System hinzu
